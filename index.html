@@ -1,17 +1,17 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QR Kod Okuyucu</title>
+  <title>QR Kod Okuma ve Arka Kamera</title>
+  <script src="https://unpkg.com/jsqr/dist/jsQR.js"></script> <!-- jsQR kütüphanesini dahil et -->
 </head>
-<body style="text-align:center; font-family:sans-serif;">
-  <h2>QR Kod Okut</h2>
-  <video id="kamera" style="width:100%; max-width:400px;" autoplay></video>
+<body>
 
-  <!-- Instascan kütüphanesi -->
-  <script src="https://rawgit.com/schmich/instascan-builds/master/instascan.min.js"></script>
-  <!-- Bizim tarayıcı kodumuz -->
-  <script src="js/scanner.js"></script>
+  <h1>QR Kod Okut</h1>
+  <video id="video" width="600" height="400" autoplay></video> <!-- Video öğesi -->
+  <p id="model-info">QR kodu okutun...</p> <!-- QR kod okunduğunda gösterilecek bilgi -->
+
+  <script src="js/app.js"></script> <!-- JavaScript dosyasını burada dahil ediyoruz -->
 </body>
 </html>
