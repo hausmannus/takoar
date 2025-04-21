@@ -1,88 +1,81 @@
 // js/app.js
-(function() {
+(async function() {
   const video = document.getElementById('video');
-  const info = document.getElementById('info');
-  const modelContainer = document.getElementById('model-container');
+  const container = document.getElementById('model-container');
 
+  // Arka kamerayı başlat
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream;
+    video.setAttribute('playsinline', true); // iOS uyumluluk
+    await video.play();
+  } catch (err) {
+    console.error('Kamera başlatılamadı:', err);
+    return;
+  }
+
+  // QR tarama için canvas
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
   let scanning = true;
 
-  // Arka kamerayı başlat ve QR taramayı başlat
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-    .then(stream => {
-      video.srcObject = stream;
-      video.setAttribute('playsinline', true); // iOS için
-      video.play();
-      requestAnimationFrame(tick);
-    })
-    .catch(err => {
-      console.error('Kamera açılamadı:', err);
-      info.textContent = 'Kamera açılamadı';
-    });
-
-  function tick() {
+  function scan() {
     if (!scanning) return;
     if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, 0, 0);
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
       if (code) {
         scanning = false;
         video.pause();
-        info.textContent = 'Model yükleniyor...';
-        displayModel(code.data);
+        loadModel(code.data); // QR kod içindeki URL'i modele yükle
         return;
       }
     }
-    requestAnimationFrame(tick);
+    requestAnimationFrame(scan);
   }
 
-  function displayModel(modelUrl) {
-    // Kamera ve bilgi metnini gizle
-    video.style.display = 'none';
-    info.style.display = 'none';
-    modelContainer.innerHTML = '';
+  scan();
 
-    // three.js sahnesi
+  // 3D model render fonksiyonu
+  function loadModel(url) {
+    // Video'yu gizle
+    video.style.display = 'none';
+    container.innerHTML = '';
+
+    // Three.js sahne kurulumu
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(
-      75,
-      modelContainer.clientWidth / modelContainer.clientHeight,
+      60,
+      container.clientWidth / container.clientHeight,
       0.1,
       1000
     );
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(modelContainer.clientWidth, modelContainer.clientHeight);
-    modelContainer.appendChild(renderer.domElement);
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
 
-    // Işıklar
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
-    scene.add(hemiLight);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    dirLight.position.set(0, 10, 10);
-    scene.add(dirLight);
+    // Işık ekle
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+    scene.add(hemi);
 
     camera.position.set(0, 1.5, 3);
 
-    // Model yükleme
+    // Modeli yükle ve sahneye ekle
     const loader = new THREE.GLTFLoader();
     loader.load(
-      modelUrl,
+      url,
       gltf => {
         scene.add(gltf.scene);
         animate();
       },
       undefined,
-      error => {
-        console.error('Model yüklenemedi:', error);
-        info.style.display = 'block';
-        info.textContent = 'Model yüklenemedi';
-      }
+      err => console.error('Model yüklenirken hata:', err)
     );
 
+    // Animasyon döngüsü
     function animate() {
       requestAnimationFrame(animate);
       renderer.render(scene, camera);
