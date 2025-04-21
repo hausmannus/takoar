@@ -1,17 +1,99 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QR Kod Okuma ve Arka Kamera</title>
-  <script src="https://unpkg.com/jsqr/dist/jsQR.js"></script> <!-- jsQR kütüphanesini dahil et -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QR → 3D Model Viewer</title>
+  <style>
+    body { margin:0; font-family:sans-serif; text-align:center; }
+    #video, #model-container { width: 100%; max-width: 400px; margin: 10px auto; display: block; }
+    #model-container { height: 300px; background: #eee; }
+  </style>
+
+  <!-- jsQR -->
+  <script src="https://unpkg.com/jsqr/dist/jsQR.js"></script>
+  <!-- three.js ve GLTFLoader -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
 
-  <h1>QR Kod Okut</h1>
-  <video id="video" width="600" height="400" autoplay></video> <!-- Video öğesi -->
-  <p id="model-info">QR kodu okutun...</p> <!-- QR kod okunduğunda gösterilecek bilgi -->
+  <h1>QR Kod Okut ve Modeli İncele</h1>
+  <video id="video" autoplay muted playsinline></video>
+  <p id="info">QR kodu okut...</p>
+  <div id="model-container"></div>
 
-  <script src="js/app.js"></script> <!-- JavaScript dosyasını burada dahil ediyoruz -->
+  <script>
+  const video = document.getElementById('video');
+  const info  = document.getElementById('info');
+  const container = document.getElementById('model-container');
+
+  // 1. Arka kamerayı aç
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+    .then(s => video.srcObject = s)
+    .catch(err => info.textContent = 'Kamera açılamadı: '+err);
+
+  // 2. QR kod tarayıcı döngüsü
+  video.addEventListener('play', () => {
+    const canvas = document.createElement('canvas');
+    const ctx    = canvas.getContext('2d');
+
+    function tick() {
+      if (video.paused || video.ended) return;
+      canvas.width = video.videoWidth;
+      canvas.height= video.videoHeight;
+      ctx.drawImage(video,0,0);
+      const img = ctx.getImageData(0,0,canvas.width,canvas.height);
+      const code = jsQR(img.data, img.width, img.height);
+      if (code) {
+        info.textContent = 'QR: '+code.data;
+        loadModel(code.data);
+      } else {
+        requestAnimationFrame(tick);
+      }
+    }
+    tick();
+  });
+
+  // 3. Gelen URL’i modellendirip render et
+  let renderer, scene, camera, loader, animId;
+  function loadModel(url) {
+    // Tekrar taramayı durdur
+    video.pause();
+
+    // Eğer önceki render varsa iptal et
+    if (animId) cancelAnimationFrame(animId);
+    container.innerHTML = '';
+
+    // three.js sahne hazırlığı
+    scene = new THREE.Scene();
+    camera= new THREE.PerspectiveCamera( 60, container.clientWidth / container.clientHeight, 0.1, 1000);
+    renderer= new THREE.WebGLRenderer({ antialias:true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    // Işık
+    const hemi = new THREE.HemisphereLight(0xffffff,0x444444,1.2);
+    scene.add(hemi);
+    camera.position.set(0,1.5,3);
+
+    // Model yükleyici
+    loader = new THREE.GLTFLoader();
+    loader.load(url,
+      gltf => {
+        scene.add(gltf.scene);
+        animId = requestAnimationFrame(animate);
+      },
+      undefined,
+      err => info.textContent = 'Model yüklenemedi'
+    );
+  }
+
+  function animate() {
+    animId = requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+  }
+  </script>
+
 </body>
 </html>
