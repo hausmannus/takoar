@@ -2,15 +2,18 @@ const videoElement = document.getElementById('video');
 const modelInfo = document.getElementById('model-info');
 const modelContainer = document.getElementById('model-container');
 
-// Kamera başlat
+let scanning = true;
+
+// Arka kamerayı başlat
 navigator.mediaDevices.getUserMedia({
   video: { facingMode: "environment" }
 })
-.then((stream) => {
+.then(stream => {
   videoElement.srcObject = stream;
 })
-.catch((err) => {
+.catch(err => {
   console.error("Kamera açılırken hata:", err);
+  modelInfo.textContent = 'Kamera açılamadı';
 });
 
 videoElement.addEventListener('play', () => {
@@ -18,7 +21,7 @@ videoElement.addEventListener('play', () => {
   const context = canvas.getContext('2d');
 
   function scanQRCode() {
-    if (videoElement.paused || videoElement.ended) return;
+    if (!scanning || videoElement.paused || videoElement.ended) return;
 
     canvas.width = videoElement.videoWidth;
     canvas.height = videoElement.videoHeight;
@@ -27,40 +30,65 @@ videoElement.addEventListener('play', () => {
     const code = jsQR(imageData.data, canvas.width, canvas.height);
 
     if (code) {
-      modelInfo.textContent = `QR Kod: ${code.data}`;
-      display3DModel(code.data); // Burada modeli gösteriyoruz
+      // QR kod okutuldu, taramayı durdur
+      scanning = false;
+      videoElement.pause();
+      modelInfo.textContent = 'Model yükleniyor...';
+      loadAndDisplayModel(code.data);
+    } else {
+      requestAnimationFrame(scanQRCode);
     }
-
-    requestAnimationFrame(scanQRCode);
   }
 
   scanQRCode();
 });
 
-function display3DModel(modelUrl) {
+function loadAndDisplayModel(modelUrl) {
+  // Gizle video ve bilgi metni
+  videoElement.style.display = 'none';
+  modelInfo.style.display = 'none';
+
+  // Temizle ve three.js sahnesini kur
+  modelContainer.innerHTML = '';
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(75, modelContainer.clientWidth / modelContainer.clientHeight, 0.1, 1000);
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const camera = new THREE.PerspectiveCamera(
+    75,
+    modelContainer.clientWidth / modelContainer.clientHeight,
+    0.1,
+    1000
+  );
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(modelContainer.clientWidth, modelContainer.clientHeight);
-  modelContainer.innerHTML = '';  // Önceki renderı temizle
   modelContainer.appendChild(renderer.domElement);
 
-  const light = new THREE.HemisphereLight(0xffffff, 0x444444);
-  scene.add(light);
+  // Işık ekle
+  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
+  scene.add(hemiLight);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight.position.set(5, 10, 7.5);
+  scene.add(dirLight);
 
   camera.position.set(0, 1.5, 3);
 
+  // Model yükle
   const loader = new THREE.GLTFLoader();
-  loader.load(modelUrl, function (gltf) {
-    scene.add(gltf.scene);
-  }, undefined, function (error) {
-    console.error('Model yüklenirken hata:', error);
-  });
+  loader.load(
+    modelUrl,
+    gltf => {
+      scene.add(gltf.scene);
+      animate();
+    },
+    undefined,
+    error => {
+      console.error('Model yüklenirken hata:', error);
+      modelInfo.style.display = 'block';
+      modelInfo.textContent = 'Model yüklenemedi';
+    }
+  );
 
+  // Animasyon döngüsü
   function animate() {
     requestAnimationFrame(animate);
     renderer.render(scene, camera);
   }
-
-  animate();
 }
